@@ -100,7 +100,7 @@ def http_server():
                     else:
                         print(f"\n\tHTTP错误：{e}")
                         break
-                utime.sleep_ms(100)  # 限制帧率不超过10，给其它线程留下CPU时间
+                #utime.sleep_ms(30)  # 限制帧率
                 ssCNT += 1  # 帧计数
         except Exception as e:
             print(f"\n\t建立HTTP服务时出错：{e}")
@@ -119,12 +119,11 @@ def http_server():
 def th_Camera():
     global img, imgLock, RunCamera, ssCNT
 
-    cam = Sensor()  # 默认摄像头2，一共支持3个摄像头
+    cam = Sensor(id=2, width=1280, height=720, fps=90)
     cam.reset()
-    cam.set_framesize(width=640, height=360, chn=CAM_CHN_ID_0)  # 每个摄像头有3个通道，我们使用ch0
-    cam.set_pixformat(Sensor.RGB565, chn=CAM_CHN_ID_0)  # 目前还不支持rgb888转换到jpg格式
+    cam.set_framesize(width=640, height=480, chn=CAM_CHN_ID_0)
+    cam.set_pixformat(Sensor.GRAYSCALE, chn=CAM_CHN_ID_0)
 
-    Display.init(Display.ST7701, to_ide=True, osd_num=2)
     MediaManager.init()
     cam.run()
 
@@ -140,34 +139,20 @@ def th_Camera():
             # 只显示帧数，不显示FPS
             img.draw_string_advanced(5, 5, 36, f'{ssCNT}', color=(255, 0, 0))
             imgLock.release()
-        utime.sleep_ms(50)  # 为保证数据及时刷新，2倍于推送帧率
+        #utime.sleep_ms(15)  # 为保证数据及时刷新，2倍于推送帧率
         fps = clock.fps()
         # 在控制台打印FPS
         print(f'当前FPS: {fps:.1f}')
     cam.stop()
-    utime.sleep_ms(100)
+    #utime.sleep_ms(30)
     MediaManager.deinit()
 
-# 显示
-def th_Display():
-    global img, imgLock, RunCamera
-
-    while img == None and RunCamera == True:  # 死等摄像头启动后赋值给img
-        utime.sleep_ms(100)
-
-    while RunCamera:
-        if imgLock.acquire(0, 0):  # 申请变量img的锁，无阻塞
-            display = Display()
-            display.show_image(img, x=80, y=60)  # 显示图片
-            imgLock.release()
-        utime.sleep_ms(100)
 
 if __name__ == "__main__":
     RunCamera = True  # 线程退出条件，比如按Key键3秒后修改此值即可关闭程序
     imgLock = _thread.allocate_lock()  # 线程锁实例
 
     _thread.start_new_thread(th_Camera, ())   # 摄像头线程
-    _thread.start_new_thread(th_Display, ())  # 显示线程
     _thread.start_new_thread(http_server, ()) # 推流线程
 
     while RunCamera:
