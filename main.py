@@ -70,9 +70,7 @@ def http_server():
                      "Content-Type: multipart/x-mixed-replace;boundary=Tao\r\n" \
                      "Cache-Control: no-cache\r\n" \
                      "Pragma: no-cache\r\n\r\n"
-            print(1)
             cl.send(header.encode())
-            print(2)
 
             while RunCamera:
                 try:
