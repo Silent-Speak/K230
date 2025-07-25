@@ -6,7 +6,6 @@ from media.media import *
 time.sleep(5) #等待WiFi模块初始化
 # 全局变量
 img = None  # 拍摄到的照片
-imgLock = _thread.allocate_lock()  # 图像锁
 RunCamera = True  # 线程退出标志
 ssCNT = 0  # 帧计数
 gc_threshold = 200  # 每发送200张图像进行一次垃圾回收
@@ -35,7 +34,7 @@ def network_use_wlan(is_wlan=True):
 
 # HTTP服务
 def http_server():
-    global img, imgLock, RunCamera, ssCNT, gc_threshold
+    global img, RunCamera, ssCNT, gc_threshold
 
     # 连接网络，获取IP地址
     IPaddress = network_use_wlan()
@@ -76,23 +75,18 @@ def http_server():
 
             while RunCamera:
                 try:
-                    if imgLock.acquire(1, 1):  # 申请img变量的锁，阻塞1秒
-                        if img is not None:  # 检查img是否为None
-                            img_bytes = img.compress(quality=50)
-                            imgLock.release()
-                            header = f"--Tao\r\nContent-Type: image/jpeg\r\nContent-Length: {len(img_bytes)}\r\n\r\n"
-                            cl.send(header.encode())
-                            cl.send(img_bytes)
+                    if img is not None:  # 检查img是否为None
+                        img_bytes = img.compress(quality=50)
+                        header = f"--Tao\r\nContent-Type: image/jpeg\r\nContent-Length: {len(img_bytes)}\r\n\r\n"
+                        cl.send(header.encode())
+                        cl.send(img_bytes)
 
-                            del img_bytes
-                            if ssCNT % gc_threshold == 0:
-                                gc.collect()
-                                print(f"Garbage collected at frame {ssCNT}")
-                        else:
-                            imgLock.release()
-                            print('img变量为None')
+                        del img_bytes
+                        if ssCNT % gc_threshold == 0:
+                            gc.collect()
+                            print(f"Garbage collected at frame {ssCNT}")
                     else:
-                        print('img变量锁申请超时')
+                        print('img变量为None')
                 except Exception as e:
                     if e.errno == 11:
                         print('\t-----Error 11-----')
@@ -100,7 +94,7 @@ def http_server():
                     else:
                         print(f"\n\tHTTP错误：{e}")
                         break
-                #utime.sleep_ms(30)  # 限制帧率
+                utime.sleep_ms(30)  # 限制帧率
                 ssCNT += 1  # 帧计数
         except Exception as e:
             print(f"\n\t建立HTTP服务时出错：{e}")
@@ -117,7 +111,7 @@ def http_server():
 
 # 拍摄
 def th_Camera():
-    global img, imgLock, RunCamera, ssCNT
+    global img, RunCamera, ssCNT
 
     cam = Sensor(id=2, width=1280, height=720, fps=90)
     cam.reset()
@@ -132,25 +126,22 @@ def th_Camera():
 
     while RunCamera:
         clock.tick()
-        if imgLock.acquire(1, 1):  # 申请变量img的锁，阻塞1秒
-            del img
-            gc.collect()
-            img = cam.snapshot()
-            # 只显示帧数，不显示FPS
-            img.draw_string_advanced(5, 5, 36, f'{ssCNT}', color=(255, 0, 0))
-            imgLock.release()
-        #utime.sleep_ms(15)  # 为保证数据及时刷新，2倍于推送帧率
+        del img
+        gc.collect()
+        img = cam.snapshot()
+        # 只显示帧数，不显示FPS
+        img.draw_string_advanced(5, 5, 36, f'{ssCNT}', color=(255, 0, 0))
+        utime.sleep_ms(15)  # 为保证数据及时刷新，2倍于推送帧率
         fps = clock.fps()
         # 在控制台打印FPS
         print(f'当前FPS: {fps:.1f}')
     cam.stop()
-    #utime.sleep_ms(30)
+    utime.sleep_ms(30)
     MediaManager.deinit()
 
 
 if __name__ == "__main__":
     RunCamera = True  # 线程退出条件，比如按Key键3秒后修改此值即可关闭程序
-    imgLock = _thread.allocate_lock()  # 线程锁实例
 
     _thread.start_new_thread(th_Camera, ())   # 摄像头线程
     _thread.start_new_thread(http_server, ()) # 推流线程
