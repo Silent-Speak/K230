@@ -137,7 +137,7 @@ def th_Camera():
             gc.collect()
             img = cam.snapshot()
             # 只显示帧数，不显示FPS
-            img.draw_string_advanced(5, 5, 36, f'{ssCNT}', color=(255, 0, 0))
+            #img.draw_string_advanced(5, 5, 36, f'{ssCNT}', color=(255, 0, 0))
             imgLock.release()
         #utime.sleep_ms(15)  # 为保证数据及时刷新，2倍于推送帧率
         fps = clock.fps()
