@@ -1,4 +1,4 @@
-import utime, ubinascii, ujson, usocket, _thread, network, gc
+import utime, ubinascii, ujson, usocket, _thread, network, gc, machine
 import time
 from media.sensor import *
 from media.display import *
@@ -10,9 +10,12 @@ imgLock = _thread.allocate_lock()  # 图像锁
 RunCamera = True  # 线程退出标志
 ssCNT = 0  # 帧计数
 gc_threshold = 200  # 每发送200张图像进行一次垃圾回收
+IPaddress = "0.0.0.0"
 
 SSID = 'HUAWEI-72E9'
 PASSWORD = 'abcd5678'
+
+
 
 def network_use_wlan(is_wlan=True):
     if is_wlan:
@@ -38,7 +41,7 @@ def http_server():
     global img, imgLock, RunCamera, ssCNT, gc_threshold
 
     # 连接网络，获取IP地址
-    IPaddress = network_use_wlan()
+
     Port = 80
     ai = usocket.getaddrinfo(IPaddress, Port)
     addr = ai[0][-1]
@@ -113,6 +116,71 @@ def http_server():
             cl.close()
             utime.sleep(1)  # 等1秒，确保所有数据都已发送完毕
 
+# 按钮状态服务
+def button_server():
+    global RunCamera
+
+    print("1")
+
+    button = machine.Pin(53, machine.Pin.IN, machine.Pin.PULL_DOWN)
+
+    print("2")
+
+    # 连接网络，获取IP地址
+    cnt = 10
+    Port = 81  # 使用不同的端口
+    ai = usocket.getaddrinfo(IPaddress, Port)
+    addr = ai[0][-1]
+    print(f'\tCreate Button server listen at {IPaddress}:{Port}\n\n')
+
+    # 创建按钮状态服务器
+    s = usocket.socket()
+    s.setsockopt(usocket.SOL_SOCKET, usocket.SO_REUSEADDR, 1)
+    s.bind(addr)
+    s.listen(5)
+
+    while True:
+        while True:
+            try:
+                cl, addr = s.accept()
+                break
+            except Exception as e:
+                print({e})
+                print("button 等待连接")
+                time.sleep(0.5)
+
+
+        while RunCamera:
+            try:
+                print(f"Button client connected from {addr}")
+
+                # 读取按钮状态 (按下为1，未按下为0)
+                if button.value()==1:
+                    cnt+=button.value()
+
+                # 构建HTTP响应
+                response = "HTTP/1.1 200 OK\r\n"
+                response += "Content-Type: text/plain\r\n"
+                response += "Access-Control-Allow-Origin: *\r\n"  # 允许跨域访问
+                response += f"Content-Length: {len(str(cnt))}\r\n"
+                response += "\r\n"
+                response += str(cnt)
+
+                cl.send(response.encode())
+                print("ggbond")
+                print(f"Sent button state: {cnt}")
+                utime.sleep(0.1)
+
+            except Exception as e:
+                print(f"\n\t按钮服务错误：{e}")
+                if 'cl' in locals():
+                    pass
+                utime.sleep(1)
+                break
+
+    print("prepare close 1111111")
+    s.close()
+
 # 拍摄
 def th_Camera():
     global img, imgLock, RunCamera, ssCNT
@@ -147,11 +215,13 @@ def th_Camera():
 
 
 if __name__ == "__main__":
+    IPaddress = network_use_wlan()
     RunCamera = True  # 线程退出条件，比如按Key键3秒后修改此值即可关闭程序
     imgLock = _thread.allocate_lock()  # 线程锁实例
 
     _thread.start_new_thread(th_Camera, ())   # 摄像头线程
     _thread.start_new_thread(http_server, ()) # 推流线程
+    _thread.start_new_thread(button_server, ()) # 按钮状态服务线程
 
-    while RunCamera:
+    while True:
         utime.sleep(1)
