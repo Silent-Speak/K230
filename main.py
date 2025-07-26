@@ -120,11 +120,7 @@ def http_server():
 def button_server():
     global RunCamera
 
-    print("1")
-
     button = machine.Pin(53, machine.Pin.IN, machine.Pin.PULL_DOWN)
-
-    print("2")
 
     # 连接网络，获取IP地址
     cnt = 10
@@ -142,6 +138,13 @@ def button_server():
     while True:
         while True:
             try:
+                if button.value() == 1:
+                    cnt+=1
+                    print(123456789)
+                    # 防抖处理 - 等待按钮释放
+                    start_time = utime.ticks_ms()
+                    while button.value() == 1 and utime.ticks_diff(utime.ticks_ms(), start_time) < 300:
+                        utime.sleep_ms(10)
                 cl, addr = s.accept()
                 break
             except Exception as e:
@@ -149,14 +152,18 @@ def button_server():
                 print("button 等待连接")
                 time.sleep(0.5)
 
+        print(f"Button client connected from {addr}")
 
         while RunCamera:
             try:
-                print(f"Button client connected from {addr}")
-
                 # 读取按钮状态 (按下为1，未按下为0)
-                if button.value()==1:
-                    cnt+=button.value()
+                if button.value() == 1:
+                    cnt+=1
+                    print(123456789)
+                    # 防抖处理 - 等待按钮释放
+                    start_time = utime.ticks_ms()
+                    while button.value() == 1 and utime.ticks_diff(utime.ticks_ms(), start_time) < 300:
+                        utime.sleep_ms(10)
 
                 # 构建HTTP响应
                 response = "HTTP/1.1 200 OK\r\n"
@@ -167,9 +174,7 @@ def button_server():
                 response += str(cnt)
 
                 cl.send(response.encode())
-                print("ggbond")
                 print(f"Sent button state: {cnt}")
-                utime.sleep(0.1)
 
             except Exception as e:
                 print(f"\n\t按钮服务错误：{e}")
@@ -177,8 +182,6 @@ def button_server():
                     pass
                 utime.sleep(1)
                 break
-
-    print("prepare close 1111111")
     s.close()
 
 # 拍摄
